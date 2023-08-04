@@ -1,5 +1,9 @@
 import re
 import pandas as pd
+import numpy as np
+from sklearn.neighbors import NearestNeighbors
+import random
+from math import isnan
 
 def to_snake_case(name):
     """Convert string from camelcase to snake case."""
@@ -52,3 +56,82 @@ def clean_df(df):
             'age_basket': 'str',
         })
     )
+
+
+def drop_outliers(df: pd.DataFrame, columns: list, method: str):
+    """Drop outliers from a dataframe
+
+    Args:
+        df (pd.DataFrame): dataframe to drop outliers from
+        columns (list): list of columns to check
+        method (str): methid to use
+
+    Returns:
+        pd.DataFrame: dataframe with outliers dropped
+    """
+
+    index_outliers= []
+
+    if method == 'z_score':
+        for col in columns:
+            lower_limit = df[col].mean() - 3*df[col].std()
+            upper_limit = df[col].mean() + 3*df[col].std()
+            indexes= df.loc[
+                (df[col] < lower_limit) | (df[col] > upper_limit)
+            ].index.to_list()
+            index_outliers.extend(indexes)
+    elif method == 'iqr':
+        for col in columns:
+            percentile05 = df[col].quantile(0.05)
+            percentile95 = df[col].quantile(0.95)
+            iqr = percentile95 - percentile05
+            lower_limit = percentile05 - 1.5 * iqr
+            upper_limit = percentile95 + 1.5 * iqr
+            indexes= df.loc[
+                (df[col] < lower_limit) | (df[col] > upper_limit)
+            ].index.to_list()
+            index_outliers.extend(indexes)
+    else:
+        print('method unrecognized')
+
+    df= df.drop(index= index_outliers)
+    return df
+
+
+def hopkins_test(X: pd.DataFrame):
+    """Hopkins test to check if array contains meaningful cluster
+    Close to 1: the data is highly clustered, 
+    0.5: random data, 
+    Close to 0: uniformly distributed data
+    
+    Args:
+        X (pd.DataFrame): df to test. Scale and get dummies first
+
+    Returns:
+        str: hopkins test result
+    """
+
+    d = X.shape[1]
+    n = len(X)
+    m = int(0.1 * n)
+    nbrs = NearestNeighbors(n_neighbors=1).fit(X.values)
+
+    rand_X = random.sample(range(0, n, 1), m)
+
+    ujd = []
+    wjd = []
+    for j in range(0, m):
+        u_dist, _ = nbrs.kneighbors(np.random.uniform(np.amin(X,axis=0),np.amax(X,axis=0),d).reshape(1, -1), 2, return_distance=True)
+        ujd.append(u_dist[0][1])
+        w_dist, _ = nbrs.kneighbors(X.iloc[rand_X[j]].values.reshape(1, -1), 2, return_distance=True)
+        wjd.append(w_dist[0][1])
+
+    H = sum(ujd) / (sum(ujd) + sum(wjd))
+    if isnan(H):
+        print (ujd, wjd)
+        H = 0
+
+    if H <= 0.5:
+        print(f'Hopkins statistic= {H: .3f}: no meaningful clusters')
+    elif H > 0.5:
+        print(f'Hopkins statistic= {H: .3f}: there are meaningful clusters')
