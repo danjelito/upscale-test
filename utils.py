@@ -87,7 +87,7 @@ def clean_df(df):
             enroll_year=lambda df_: df_["dt_customer"].dt.year,
             age=lambda df_: max(df_["dt_customer"].dt.year) - df_["year_birth"],
             age_basket=lambda df_: pd.cut(
-                df_["age"], bins=age_bin_edges, labels=age_bin_labels, right=False
+                df_["age"], bins=age_bin_edges, labels=age_bin_labels, right=False, ordered= True
             ),
             education=lambda df_: df_["education"].map(map_edu),
             marital_status=lambda df_: df_["marital_status"].map(map_marital),
